@@ -17,7 +17,7 @@ const apiKey = process.env.API_KEY || "";
 const getCachedTotalCveCount = async () => {
   const cachedTotalCveCount = await redisClient.get("totalResults");
   if (cachedTotalCveCount) {
-    return cachedTotalCveCount;
+    return parseInt(cachedTotalCveCount, 10);
   }
 
   try {
@@ -25,13 +25,14 @@ const getCachedTotalCveCount = async () => {
       params: { startIndex: 0, resultsPerPage: 1 },
       headers: { apiKey },
     });
+    const totalResults = parseInt(response.data.totalResults, 10);
 
-    const totalResults = response.data.totalResults;
-    await redisClient.setEx("totalResults", CACHE_TTL, totalResults);
+    await redisClient.setEx("totalResults", CACHE_TTL, totalResults.toString());
 
     return totalResults;
   } catch (err) {
     console.error(err);
+    return 0;
   }
 };
 
