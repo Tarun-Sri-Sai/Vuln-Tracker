@@ -70,16 +70,17 @@ app.get("/api/cve", async (req, res) => {
 
     const params = { startIndex, resultsPerPage };
     const redisKey = JSON.stringify(params);
+  
     const cachedRes = await redisClient.get(redisKey);
-
     if (cachedRes) {
       res.status(200).json(JSON.parse(cachedRes));
       return;
     }
 
     const response = await axios.get(API_BASE_URL, { params });
-    await redisClient.setEx(redisKey, CACHE_TTL, JSON.stringify(response));
-    res.status(200).json(response);
+    const vulnerabilities = response.data.vulnerabilities;
+    await redisClient.setEx(redisKey, CACHE_TTL, JSON.stringify(vulnerabilities));
+    res.status(200).json(vulnerabilities);
   } catch (err) {
     console.error(err);
 
