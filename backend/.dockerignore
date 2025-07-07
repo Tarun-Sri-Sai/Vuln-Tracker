@@ -1,0 +1,7 @@
+**
+
+!src/
+!src/**
+!.env
+!package*.json
+!tsconfig.json
