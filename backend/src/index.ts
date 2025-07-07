@@ -2,7 +2,9 @@ import express from "express";
 import axios, { AxiosError } from "axios";
 import { createClient } from "redis";
 import dotenv from "dotenv";
-import { API_BASE_URL, CACHE_TTL, PORT, REDIS_HOST } from "./constants";
+import { API_BASE_URL, PORT, REDIS_HOST } from "./constants/endpoints";
+import { CACHE_TTL } from "./constants/redis";
+import { CVEItem } from "./types/cve";
 
 dotenv.config();
 
@@ -70,7 +72,7 @@ app.get("/api/cve", async (req, res) => {
 
     const params = { startIndex, resultsPerPage };
     const redisKey = JSON.stringify(params);
-  
+
     const cachedRes = await redisClient.get(redisKey);
     if (cachedRes) {
       res.status(200).json(JSON.parse(cachedRes));
@@ -78,8 +80,21 @@ app.get("/api/cve", async (req, res) => {
     }
 
     const response = await axios.get(API_BASE_URL, { params });
-    const vulnerabilities = response.data.vulnerabilities;
-    await redisClient.setEx(redisKey, CACHE_TTL, JSON.stringify(vulnerabilities));
+    const vulnerabilities = response.data.vulnerabilities.sort(
+      (a: CVEItem, b: CVEItem) => {
+        const [, yearA, numA] = a.cve.id.split("-");
+        const [, yearB, numB] = b.cve.id.split("-");
+
+        const yearDiff = parseInt(yearB) - parseInt(yearA);
+        const numDiff = parseInt(numB) - parseInt(numA);
+        return yearDiff || numDiff;
+      }
+    );
+    await redisClient.setEx(
+      redisKey,
+      CACHE_TTL,
+      JSON.stringify(vulnerabilities)
+    );
     res.status(200).json(vulnerabilities);
   } catch (err) {
     console.error(err);
