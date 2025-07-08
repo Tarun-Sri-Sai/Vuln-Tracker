@@ -4,7 +4,6 @@ import { createClient } from "redis";
 import dotenv from "dotenv";
 import { API_BASE_URL, PORT, REDIS_HOST } from "./constants/endpoints";
 import { CACHE_TTL } from "./constants/redis";
-import { CVEItem } from "./types/cve";
 
 dotenv.config();
 
@@ -16,61 +15,19 @@ redisClient.connect().catch(console.error);
 
 const apiKey = process.env.API_KEY || "";
 
-const getCachedTotalCveCount = async () => {
-  const cachedTotalCveCount = await redisClient.get("totalResults");
-  if (cachedTotalCveCount) {
-    return parseInt(cachedTotalCveCount, 10);
-  }
-
-  try {
-    const response = await axios.get(API_BASE_URL, {
-      params: { startIndex: 0, resultsPerPage: 1 },
-      headers: { apiKey },
-    });
-    const totalResults = parseInt(response.data.totalResults, 10);
-
-    await redisClient.setEx("totalResults", CACHE_TTL, totalResults.toString());
-
-    return totalResults;
-  } catch (err) {
-    console.error(err);
-    return 0;
-  }
-};
-
 const isClientError = (err: AxiosError) => {
   const statusCode = err.response?.status || 500;
   return statusCode >= 400 && statusCode < 500;
 };
 
-app.get("/api/cve", async (req, res) => {
-  const totalCveCount = await getCachedTotalCveCount();
-
-  const offset = parseInt(req.query.startIndex as string, 10) || 0;
-  if (isNaN(offset) || offset < 0) {
-    res
-      .status(400)
-      .json({ error: "startIndex parameter must be a non-negative integer" });
-    return;
-  }
-  if (offset >= totalCveCount) {
-    res
-      .status(404)
-      .json({ error: "No results found for the given value for startIndex" });
-    return;
-  }
-
-  const resultsPerPage = parseInt(req.query.resultsPerPage as string, 10) || 10;
-  if (isNaN(resultsPerPage) || resultsPerPage < 0) {
-    res
-      .status(400)
-      .json("resultsPerPage parameter must be a non-negative integer");
-  }
-
+app.get("/api/cves", async (req, res) => {
   try {
-    const startIndex = totalCveCount - offset - resultsPerPage;
-
-    const params = { startIndex, resultsPerPage };
+    const params = Object.keys(req.query)
+      .sort()
+      .reduce((acc, key) => {
+        acc[key] = req.query[key];
+        return acc;
+      }, {} as Record<string, any>);
     const redisKey = JSON.stringify(params);
 
     const cachedRes = await redisClient.get(redisKey);
@@ -80,22 +37,9 @@ app.get("/api/cve", async (req, res) => {
     }
 
     const response = await axios.get(API_BASE_URL, { params });
-    const vulnerabilities = response.data.vulnerabilities.sort(
-      (a: CVEItem, b: CVEItem) => {
-        const [, yearA, numA] = a.cve.id.split("-");
-        const [, yearB, numB] = b.cve.id.split("-");
-
-        const yearDiff = parseInt(yearB) - parseInt(yearA);
-        const numDiff = parseInt(numB) - parseInt(numA);
-        return yearDiff || numDiff;
-      }
-    );
-    await redisClient.setEx(
-      redisKey,
-      CACHE_TTL,
-      JSON.stringify(vulnerabilities)
-    );
-    res.status(200).json(vulnerabilities);
+    const resData = response.data;
+    await redisClient.setEx(redisKey, CACHE_TTL, JSON.stringify(resData));
+    res.status(200).json(resData);
   } catch (err) {
     console.error(err);
 
