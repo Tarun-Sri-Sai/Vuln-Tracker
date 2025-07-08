@@ -1,0 +1,13 @@
+**
+
+!public/
+!public/**
+!src/
+!src/**
+!.dockerignore
+!Dockerfile
+!index.html
+!nginx.conf
+!package*.json
+!tsconfig*.json
+!vite.config.ts
