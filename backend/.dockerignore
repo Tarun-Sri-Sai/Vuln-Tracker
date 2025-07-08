@@ -2,6 +2,8 @@
 
 !src/
 !src/**
+!.dockerignore
 !.env
+!Dockerfile
 !package*.json
 !tsconfig.json
